@@ -9,7 +9,7 @@
 	<link
 		href="https://fonts.googleapis.com/css2?family=Patrick+Hand+SC&display=swap"
 		rel="stylesheet"
-	/></svelte:head
->
+	/>
+</svelte:head>
 
 <slot />
