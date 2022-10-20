@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { connect, type NatsConnection } from 'nats.ws';
+	import type { NatsConnection } from 'nats.ws';
 	import { onMount } from 'svelte';
 
 	enum GameState {
@@ -27,6 +27,7 @@
 
 	let nc: NatsConnection | null = null;
 	onMount(async () => {
+		const { connect } = await import('nats.ws');
 		nc = await connect({
 			servers: 'wss://demo.nats.io:8443'
 		});
