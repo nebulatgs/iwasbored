@@ -9,10 +9,25 @@
 		Finished = 'Finished'
 	}
 
+	interface Cursor {
+		x: number;
+		y: number;
+	}
+
+	interface CursorEvent {
+		userId: string;
+		cursor: Cursor;
+	}
+
 	let code = '';
 	let userId = '';
 	let state = GameState.Idle;
 	let players: Set<string> = new Set();
+
+	let cursors: Map<string, Cursor> = new Map();
+
+	let canvas: HTMLCanvasElement;
+	$: ctx = canvas?.getContext('2d');
 
 	function generateCode() {
 		code = Math.random().toString(36).substring(2, 15);
@@ -41,7 +56,6 @@
 
 	function joinGame() {
 		if (!nc) return;
-		console.log(code);
 		if (code.length !== 6) return;
 
 		userId = crypto.randomUUID();
@@ -71,7 +85,25 @@
 				helloSub.unsubscribe();
 				joinSub.unsubscribe();
 				startSub.unsubscribe();
+
+				players.forEach((player) => {
+					cursors.set(player, { x: 0, y: 0 });
+				});
+				cursors = cursors;
+
 				state = GameState.Playing;
+			}
+		});
+
+		const eventSub = nc.subscribe(`iwasboredgame.${code}.event`, {
+			callback: (_, msg) => {
+				if (!nc) return;
+
+				const data = JSON.parse(dec.decode(msg.data)) as CursorEvent;
+				if (data.userId === userId) return;
+
+				cursors.set(data.userId, data.cursor);
+				cursors = cursors;
 			}
 		});
 
@@ -100,8 +132,45 @@
 		code = '';
 		userId = '';
 		players.clear();
+		cursors.clear();
 		state = GameState.Idle;
 	}
+
+	function updateCursor(e: MouseEvent) {
+		if (!nc) return;
+		const enc = new TextEncoder();
+
+		const cursorEvent = {
+			userId,
+			cursor: { x: e.offsetX, y: e.offsetY }
+		} as CursorEvent;
+
+		cursors.set(userId, cursorEvent.cursor);
+		cursors = cursors;
+
+		nc.publish(`iwasboredgame.${code}.event`, enc.encode(JSON.stringify(cursorEvent)));
+	}
+
+	function drawCursors(cursors: Map<string, Cursor>) {
+		if (!ctx) return;
+
+		canvas.width = canvas.clientWidth * 2;
+		canvas.height = canvas.clientHeight * 2;
+		ctx.scale(2, 2);
+
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+		cursors.forEach((cursor, id) => {
+			if (!ctx) return;
+
+			ctx.beginPath();
+			ctx.arc(cursor.x, cursor.y, 10, 0, 2 * Math.PI);
+			ctx.fillStyle = id === userId ? 'red' : 'blue';
+			ctx.fill();
+		});
+	}
+
+	$: drawCursors(cursors);
 </script>
 
 <div class="min-w-screen min-h-screen bg-[#F7C1BB] grid place-items-center">
@@ -155,7 +224,12 @@
 					</button>
 				</div>
 			{:else if state === GameState.Playing}
-				<div class="w-full items-center justify-center inline-flex">
+				<canvas
+					bind:this={canvas}
+					on:mousemove={updateCursor}
+					class="w-screen h-screen top-0 left-0 absolute z-10"
+				/>
+				<div class="w-full items-center justify-center inline-flex z-20">
 					<button
 						class="font-button uppercase p-3 text-[#191716] py-1 bg-[#F7F7FF] border-[#FF0054] border-2 rounded-lg shadow-[2px_2px_0_#FF0054] hover:shadow-[1px_1px_0_#FF0054] hover:translate-x-[1px] hover:translate-y-[1px] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all duration-100 ease-in-out"
 						on:click={endGame}
